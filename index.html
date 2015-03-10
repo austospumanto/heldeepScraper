@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<script type="text/javascript" src="jquery-1.11.2.js"></script>
+	</head>
+
+	<body>
+		<pre id="output">working...</pre>
+	</body>
+</html>
+
+
+
+
+<script>
+
+
+var heldeepSites = ["http://www.1001tracklists.com/tracklist/63714_oliver-heldens-heldeep-radio-025-2014-11-22.html", "http://www.1001tracklists.com/tracklist/63270_oliver-heldens-heldeep-radio-024-2014-11-15.html", "http://www.1001tracklists.com/tracklist/62742_oliver-heldens-heldeep-radio-023-2014-11-08.html", "http://www.1001tracklists.com/tracklist/62310_oliv…-mr.-belt-wezol-heldeep-radio-022-2014-11-01.html", "http://www.1001tracklists.com/tracklist/61855_oliver-heldens-heldeep-radio-021-2014-10-25.html", "http://www.1001tracklists.com/tracklist/61482_oliver-heldens-heldeep-radio-020-2014-10-18.html", "http://www.1001tracklists.com/tracklist/61081_oliver-heldens-heldeep-radio-019-2014-10-10.html", "http://www.1001tracklists.com/tracklist/60700_oliver-heldens-heldeep-radio-018-2014-10-04.html", "http://www.1001tracklists.com/tracklist/60224_oliver-heldens-heldeep-radio-017-2014-09-27.html", "http://www.1001tracklists.com/tracklist/59596_oliv…at-heldeep-radio-016-electric-zoo-2014-09-19.html", "http://www.1001tracklists.com/tracklist/59178_oliver-heldens-heldeep-radio-015-2014-09-13.html", "http://www.1001tracklists.com/tracklist/58678_oliver-heldens-heldeep-radio-014-2014-09-06.html", "http://www.1001tracklists.com/tracklist/58191_oliver-heldens-heldeep-radio-013-2014-08-30.html", "http://www.1001tracklists.com/tracklist/57611_oliv…ns-the-voyagers-heldeep-radio-012-2014-08-23.html", "http://www.1001tracklists.com/tracklist/57135_oliver-heldens-heldeep-radio-011-2014-08-16.html"];
+
+var allTracklistObjects = [];
+var pageCounter = 0;
+var targetSites = [];
+var whateverOrigin = 'http://whateverorigin.org/get?url=';
+var anyOrigin = 'http://anyorigin.com/dev/get?url=';
+var theOrigin = whateverOrigin;
+var callback = '&callback=?';
+var $currentDOM;
+var currentSiteContents = "";
+
+var heldeepSiteHub = "http://www.1001tracklists.com/source/3995_heldeep-radio/index.html";
+
+$(document).ready(function(e) {
+
+    startStuff(whateverOrigin);
+
+});
+
+function startStuff(origin) {
+	theOrigin = origin;
+	getDataJSON(heldeepSiteHub, handleHeldeepLinkHubQuery);
+};
+
+function getDataJSON(site, handler) {
+    console.log("getting data from: " + site);
+    console.log("using: " + theOrigin);
+    $.getJSON(theOrigin + encodeURIComponent(site) + callback, handler);     //<=====WhateverOrigin vs AnyOrigin
+};
+
+function handleHeldeepLinkHubQuery(data) {
+    // console.log("data: " + data.contents);
+    var siteContents = data.contents;
+    var $dom = $(siteContents);
+    $currentDOM = $dom;
+    var linkArray = makeHeldeepLinkArrayFromHub($(data.contents));
+    if (linkArray.length < 2) {
+    	linkArray = heldeepSites;
+    }
+    targetSites = linkArray;
+    console.log("Completed parsing of hub page!");
+    console.log("Target Sites: ");
+    console.log(targetSites);
+    $("#output").html("");
+    getDataJSON(targetSites[0], handleTracklistPageQuery)
+};
+
+function weGotBlocked() {
+	$("#output").html("Oops! 1001Tracklists blocked me! Try again in an hour!");
+	console.log(currentSiteContents);
+};
+
+function makeHeldeepLinkArrayFromHub($dom) {
+    var linkArray = [];
+    var possibleLinks = $dom.find("tr.action a");
+    for (var i=0; i<possibleLinks.length; i++) {
+        var myA = possibleLinks[i];
+        var href = $(myA).attr("href");
+        if (href === "undefined" || href === "") continue;
+        if (href.search("/tracklist/") === 0) {
+            var actualHref = "http://www.1001tracklists.com" + href;
+            console.log(actualHref);
+            linkArray.push(actualHref);
+        }
+    }
+    return linkArray;
+};
+
+function handleTracklistPageQuery(data) {
+	// console.log($(data.contents));
+
+    var siteContents = data.contents;
+    currentSiteContents = data.contents;
+    var $dom = $(siteContents);
+    $currentDOM = $dom;
+    var tracklistObj = makeTracklistObjectFromDOM($dom);
+    tracklistObj.myURL = targetSites[pageCounter];
+    // tracklistObj.myContent = $dom.find("meta[name]").filter(function(i) {return ($(this).attr("name") === "description");}).attr("content");
+    tracklistObj.myContent = data.contents.substr(data.contents.search("Oliver"), 100);
+    // console.log(tracklistObj.myContent);
+    // console.log(data.contents);
+    if (tracklistObj.myContent) {
+    	tracklistObj.myName = tracklistObj.myContent.substr(0, tracklistObj.myContent.search("Radio")+10);
+    	tracklistObj.myDate = tracklistObj.myContent.substr(tracklistObj.myContent.search("Radio")+10, 11);
+    }
+    if (tracklistObj.trackObjects.length === 0) {
+ 		if (theOrigin === anyOrigin) weGotBlocked();
+    	else startStuff(anyOrigin);
+        // getDataJSON(targetSites[pageCounter], handleTracklistPageQuery);
+        return false;
+    }
+    allTracklistObjects.push(tracklistObj);
+    pageCounter++;
+    if (pageCounter<targetSites.length) {
+        console.log("Completed parsing target site number: " + pageCounter);
+        printTracklist(tracklistObj);
+        getDataJSON(targetSites[pageCounter], handleTracklistPageQuery);
+    }
+    else {
+        messWithTracklistObjects();
+    }
+};
+
+function messWithTracklistObjects() {
+    console.log(allTracklistObjects);
+    // printAllTracklists();
+};
+
+function makeTracklistObjectFromDOM(dom) {
+    var rawTracks = makeRawTracksArrayFromDOM(dom);
+    console.log(rawTracks);
+    var tracklistObj = new Tracklist(rawTracks);
+    return tracklistObj;
+};
+
+function makeRawTracksArrayFromDOM(dom) {
+    var possibleTracks = dom.find("table div[id]").filter(function(i){return ($(this).attr("id").search("_content") !== -1);}).find("a").filter(function(i){return ($(this).attr("href").search("/track/") === 0)});
+    var tracks = [];
+    for (var i=0; i<possibleTracks.length; i++) {
+        var myA = possibleTracks[i];
+        if (myA.href === "undefined") continue;
+        var href = $(myA).attr("href");
+        if (href.search("/track/") === 0) {
+            tracks.push(myA.outerText);
+        }
+    }
+    return tracks;
+};
+
+function rawTracksArrayToTrackTitleArray(rawTracks) {
+    var tracks = rawTracks;
+    var trackTitles = [];
+    for (var i=0; i<tracks.length; i++) {
+        var track = tracks[i];
+        var len = track.length;
+        var dashIndex = track.search(" - ");
+        var songTitle = track.substr(dashIndex+3);
+        trackTitles.push(songTitle);
+    }
+    return trackTitles;
+};
+
+function rawTracksArrayToTrackArtistArray(rawTracks) {
+    var tracks = rawTracks;
+    var trackArtists = [];
+    for (var i=0; i<tracks.length; i++) {
+        var track = tracks[i];
+        var len = track.length;
+        var dashIndex = track.search(" - ");
+        var songArtist = track.substr(0, dashIndex);
+        trackArtists.push(songArtist);
+    }
+    return trackArtists;
+};
+
+function rawTracksArrayToTrackObjectArray(rawTracks) {
+    trackObjArray = [];
+    var tracks = rawTracks;
+    for (var i=0; i<tracks.length; i++) {
+        var track = tracks[i];
+        var len = track.length;
+        var dashIndex = track.search(" - ");
+        var songArtist = track.substr(0, dashIndex);
+        var songTitle = track.substr(dashIndex+3);
+        var newTrack = new Track(songTitle, songArtist);
+        trackObjArray.push(newTrack);
+    }
+    return trackObjArray;
+};
+
+function trackObjectsArrayToMainArtists(trackObjects) {
+    var mainArtists = [];
+    for (var i=0; i<trackObjects.length; i++) {
+        mainArtists.push(trackObjects[i].myMainArtist);
+    }
+    return mainArtists;
+};
+
+function trackObjectsArrayToFeaturedArtists(trackObjects) {
+    var featuredArtists = [];
+    for (var i=0; i<trackObjects.length; i++) {
+        featuredArtists.push(trackObjects[i].myFeaturedArtist);
+    }
+    return featuredArtists;
+};
+
+function printAllTracklists() {
+	var printStr = "";
+	for (var i=0; i<allTracklistObjects.length; i++) {
+		var tL = allTracklistObjects[i];
+		printStr += tL.myName + " (" + tL.myDate + ")";
+		for (var j=0; j<tL.trackObjects.length; j++) {
+			var t = tL.trackObjects[j];
+			printStr += "<br>    ";
+			printStr += t.fullTrackLine;
+		}
+		printStr += "<br><br>"
+	}
+	console.log(printStr);
+	$("#output").html(printStr);
+};
+
+function printTracklist(tL) {
+	var printStr = "";
+	printStr += tL.myName + " (" + tL.myDate + ")";
+	for (var j=0; j<tL.trackObjects.length; j++) {
+		var t = tL.trackObjects[j];
+		printStr += "<br>    ";
+		printStr += t.fullTrackLine;
+	}
+	printStr += "<br><br>"
+	$("#output").append(printStr);
+};
+
+var Tracklist = function(rawTracks) {
+    this.rawTrackStrings = rawTracks;
+    this.trackObjects = rawTracksArrayToTrackObjectArray(rawTracks);
+    this.artists = rawTracksArrayToTrackArtistArray(rawTracks);
+    this.mainArtists = trackObjectsArrayToMainArtists(this.trackObjects);
+    this.featuredArtists = trackObjectsArrayToFeaturedArtists(this.trackObjects);
+    this.titles = rawTracksArrayToTrackTitleArray(rawTracks);
+};
+
+var Track = function(title, artist) {
+	this.fullTrackLine = artist + " - " + title;
+    this.myArtist = artist;
+    this.myTitle = title;
+    this.myMainArtist = (artist.search(" feat.") === -1) ? artist : artist.substr(0, artist.search(" feat.") + 1);
+    this.myFeaturedArtist = (artist.search(" feat.") === -1) ? "" : artist.substr(artist.search(" feat.") + 7);
+};
+
+
+
+
+
+
+
+
+
+</script>
